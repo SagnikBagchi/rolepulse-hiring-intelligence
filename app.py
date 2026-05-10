@@ -4,82 +4,151 @@ import requests
 import plotly.express as px
 from datetime import datetime, timezone
 
-# ---------------------------------------------------
+# =====================================================
 # PAGE CONFIG
-# ---------------------------------------------------
+# =====================================================
 
 st.set_page_config(
     page_title="RolePulse",
     layout="wide"
 )
 
-# ---------------------------------------------------
-# CUSTOM STYLING
-# ---------------------------------------------------
+# =====================================================
+# MODERN UI STYLING
+# =====================================================
 
 st.markdown("""
 <style>
 
+/* GLOBAL */
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+/* MAIN CONTAINER */
+
 .block-container {
     padding-top: 2rem;
     padding-bottom: 2rem;
+    max-width: 1400px;
 }
 
-h1, h2, h3 {
-    font-weight: 700;
+/* HEADINGS */
+
+h1 {
+    font-size: 3rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -1px;
 }
+
+h2, h3 {
+    font-weight: 600 !important;
+}
+
+/* KPI CARDS */
 
 [data-testid="metric-container"] {
-    background-color: #111827;
-    border: 1px solid #1f2937;
-    padding: 15px;
+    background: #ffffff10;
+    border: 1px solid #ffffff15;
+    padding: 20px;
+    border-radius: 18px;
+    backdrop-filter: blur(10px);
+}
+
+/* SIDEBAR */
+
+section[data-testid="stSidebar"] {
+    border-right: 1px solid #ffffff10;
+}
+
+/* TABS */
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 20px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 12px 20px;
     border-radius: 12px;
+    background-color: transparent;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #262730 !important;
+}
+
+/* DATAFRAME */
+
+[data-testid="stDataFrame"] {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #ffffff10;
+}
+
+/* INFO BOX */
+
+[data-testid="stAlert"] {
+    border-radius: 16px;
+}
+
+/* REMOVE STREAMLIT MENU */
+
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+header {
+    visibility: hidden;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------
+# =====================================================
 # HEADER
-# ---------------------------------------------------
+# =====================================================
 
-st.title("RolePulse")
-st.caption("Hiring Intent & Job Intelligence Platform")
+st.markdown("""
+<h1>RolePulse</h1>
+<p style='font-size:18px; color:gray; margin-top:-10px;'>
+Hiring Intent Intelligence for the Indian Job Market
+</p>
+""", unsafe_allow_html=True)
 
 st.divider()
 
-# ---------------------------------------------------
+# =====================================================
 # API CREDENTIALS
-# ---------------------------------------------------
+# =====================================================
 
 APP_ID = st.secrets["ADZUNA_APP_ID"]
 APP_KEY = st.secrets["ADZUNA_APP_KEY"]
 
-# ---------------------------------------------------
+# =====================================================
 # SIDEBAR
-# ---------------------------------------------------
+# =====================================================
 
-st.sidebar.header("Search Configuration")
+st.sidebar.title("Search")
 
 keyword = st.sidebar.text_input(
-    "Job Role",
+    "Role",
     value="Product Manager"
 )
 
-location = st.sidebar.text_input(
-    "Location",
-    value="India"
-)
-
 results_count = st.sidebar.slider(
-    "Number of Listings",
+    "Listings",
     10,
     50,
     25
 )
 
 freshness_filter = st.sidebar.selectbox(
-    "Job Freshness",
+    "Freshness",
     [
         "All",
         "Fresh",
@@ -88,9 +157,9 @@ freshness_filter = st.sidebar.selectbox(
     ]
 )
 
-# ---------------------------------------------------
+# =====================================================
 # API REQUEST
-# ---------------------------------------------------
+# =====================================================
 
 url = "https://api.adzuna.com/v1/api/jobs/in/search/1"
 
@@ -99,7 +168,7 @@ params = {
     "app_key": APP_KEY,
     "results_per_page": results_count,
     "what": keyword,
-    "where": location,
+    "where": "India",
     "content-type": "application/json"
 }
 
@@ -107,9 +176,9 @@ response = requests.get(url, params=params)
 
 data = response.json()
 
-# ---------------------------------------------------
-# PROCESS JOB DATA
-# ---------------------------------------------------
+# =====================================================
+# PROCESS JOBS
+# =====================================================
 
 jobs = []
 
@@ -151,9 +220,9 @@ for job in data.get("results", []):
         ""
     )
 
-    # ---------------------------------------------------
-    # FRESHNESS DETECTION
-    # ---------------------------------------------------
+    # =====================================================
+    # FRESHNESS
+    # =====================================================
 
     freshness = "Unknown"
     days_old = None
@@ -185,9 +254,9 @@ for job in data.get("results", []):
     except:
         freshness = "Unknown"
 
-    # ---------------------------------------------------
-    # COMPETITION ESTIMATION
-    # ---------------------------------------------------
+    # =====================================================
+    # COMPETITION
+    # =====================================================
 
     competition = "Medium"
 
@@ -197,9 +266,9 @@ for job in data.get("results", []):
     if "director" in title.lower():
         competition = "Low"
 
-    # ---------------------------------------------------
+    # =====================================================
     # DESCRIPTION QUALITY
-    # ---------------------------------------------------
+    # =====================================================
 
     description_quality = "Low"
 
@@ -209,9 +278,9 @@ for job in data.get("results", []):
     if len(description) > 800:
         description_quality = "High"
 
-    # ---------------------------------------------------
-    # HIRING INTENT SCORE
-    # ---------------------------------------------------
+    # =====================================================
+    # SCORING
+    # =====================================================
 
     score = 50
 
@@ -232,9 +301,9 @@ for job in data.get("results", []):
 
     score = min(score, 100)
 
-    # ---------------------------------------------------
-    # APPLICATION PRIORITY
-    # ---------------------------------------------------
+    # =====================================================
+    # RECOMMENDATION
+    # =====================================================
 
     if score >= 85:
         recommendation = "Apply Immediately"
@@ -253,7 +322,7 @@ for job in data.get("results", []):
         "Title": title,
         "Company": company,
         "Location": location_name,
-        "Hiring Intent Score": score,
+        "Hiring Score": score,
         "Freshness": freshness,
         "Competition": competition,
         "Description Quality": description_quality,
@@ -263,31 +332,15 @@ for job in data.get("results", []):
 
     })
 
-# ---------------------------------------------------
+# =====================================================
 # DATAFRAME
-# ---------------------------------------------------
+# =====================================================
 
-expected_columns = [
-    "Title",
-    "Company",
-    "Location",
-    "Hiring Intent Score",
-    "Freshness",
-    "Competition",
-    "Description Quality",
-    "Recommendation",
-    "Days Old",
-    "Job Link"
-]
+df = pd.DataFrame(jobs)
 
-df = pd.DataFrame(
-    jobs,
-    columns=expected_columns
-)
-
-# ---------------------------------------------------
+# =====================================================
 # FILTERS
-# ---------------------------------------------------
+# =====================================================
 
 if not df.empty:
 
@@ -299,24 +352,24 @@ if not df.empty:
             freshness_filter
         ]
 
-# ---------------------------------------------------
+# =====================================================
 # EMPTY CHECK
-# ---------------------------------------------------
+# =====================================================
 
 if df.empty:
 
     st.warning(
-        "No job listings matched the selected filters. Try adjusting your search."
+        "No listings matched the selected filters."
     )
 
     st.stop()
 
-# ---------------------------------------------------
-# EXECUTIVE INSIGHTS
-# ---------------------------------------------------
+# =====================================================
+# EXECUTIVE SUMMARY
+# =====================================================
 
 avg_score = round(
-    df["Hiring Intent Score"].mean(),
+    df["Hiring Score"].mean(),
     1
 )
 
@@ -334,166 +387,206 @@ fresh_jobs = len(
     ]
 )
 
-high_quality_descriptions = len(
-    df[
-        df["Description Quality"]
-        ==
-        "High"
-    ]
-)
+# =====================================================
+# HERO INSIGHTS
+# =====================================================
 
-st.subheader("Executive Market Insights")
-
-st.info(
-    f"""
-    Current market analysis indicates an average hiring intent score of {avg_score}.
-    
-    {top_company} appears among the most active recruiters in the selected market.
-    
-    {fresh_jobs} recently posted opportunities demonstrate strong freshness signals.
-    
-    {high_quality_descriptions} listings contain high-detail descriptions indicating stronger recruiter intent.
-    """
-)
-
-# ---------------------------------------------------
-# KPI SECTION
-# ---------------------------------------------------
+st.markdown("## Market Snapshot")
 
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
-    "Jobs Retrieved",
+    "Listings",
     len(df)
 )
 
 col2.metric(
-    "Average Hiring Score",
+    "Avg Hiring Score",
     avg_score
 )
 
 col3.metric(
-    "Fresh Listings",
+    "Fresh Roles",
     fresh_jobs
 )
 
 col4.metric(
-    "Companies Hiring",
+    "Active Companies",
     df["Company"].nunique()
 )
 
-st.divider()
+st.markdown("<br>", unsafe_allow_html=True)
 
-# ---------------------------------------------------
+# =====================================================
+# INSIGHT BOX
+# =====================================================
+
+st.info(
+    f"""
+    Current hiring activity for **{keyword}** roles in India indicates strong recruiter participation from **{top_company}**.
+    
+    Recently posted opportunities continue to dominate the market, while detailed job descriptions appear strongly correlated with higher hiring intent scores.
+    """
+)
+
+# =====================================================
 # TABS
-# ---------------------------------------------------
+# =====================================================
 
-tab1, tab2, tab3, tab4 = st.tabs([
+overview_tab, market_tab, insights_tab = st.tabs([
     "Overview",
     "Market Intelligence",
-    "Application Insights",
-    "Job Listings"
+    "Application Insights"
 ])
 
-# ---------------------------------------------------
-# TAB 1 — OVERVIEW
-# ---------------------------------------------------
+# =====================================================
+# OVERVIEW TAB
+# =====================================================
 
-with tab1:
+with overview_tab:
 
-    st.subheader("Hiring Intent Distribution")
+    left, right = st.columns(2)
 
-    fig1 = px.histogram(
-        df,
-        x="Hiring Intent Score",
-        nbins=10
-    )
+    with left:
 
-    st.plotly_chart(
-        fig1,
-        use_container_width=True
-    )
+        st.subheader("Hiring Score Distribution")
 
-    st.subheader("Freshness Distribution")
+        fig1 = px.histogram(
+            df,
+            x="Hiring Score",
+            nbins=10
+        )
 
-    fig2 = px.pie(
-        df,
-        names="Freshness"
-    )
+        fig1.update_layout(
+            height=400,
+            margin=dict(
+                l=10,
+                r=10,
+                t=30,
+                b=10
+            )
+        )
 
-    st.plotly_chart(
-        fig2,
-        use_container_width=True
-    )
+        st.plotly_chart(
+            fig1,
+            use_container_width=True
+        )
 
-# ---------------------------------------------------
-# TAB 2 — MARKET INTELLIGENCE
-# ---------------------------------------------------
+    with right:
 
-with tab2:
+        st.subheader("Freshness Breakdown")
 
-    st.subheader("Top Hiring Companies")
+        fig2 = px.pie(
+            df,
+            names="Freshness",
+            hole=0.55
+        )
 
-    top_companies = (
-        df["Company"]
-        .value_counts()
-        .head(10)
-        .reset_index()
-    )
+        fig2.update_layout(
+            height=400,
+            margin=dict(
+                l=10,
+                r=10,
+                t=30,
+                b=10
+            )
+        )
 
-    top_companies.columns = [
-        "Company",
-        "Jobs"
-    ]
+        st.plotly_chart(
+            fig2,
+            use_container_width=True
+        )
 
-    fig3 = px.bar(
-        top_companies,
-        x="Company",
-        y="Jobs"
-    )
+# =====================================================
+# MARKET TAB
+# =====================================================
 
-    st.plotly_chart(
-        fig3,
-        use_container_width=True
-    )
+with market_tab:
 
-    st.subheader("Location Hiring Distribution")
+    left, right = st.columns(2)
 
-    top_locations = (
-        df["Location"]
-        .value_counts()
-        .head(10)
-        .reset_index()
-    )
+    with left:
 
-    top_locations.columns = [
-        "Location",
-        "Jobs"
-    ]
+        st.subheader("Top Hiring Companies")
 
-    fig4 = px.treemap(
-        top_locations,
-        path=["Location"],
-        values="Jobs"
-    )
+        top_companies = (
+            df["Company"]
+            .value_counts()
+            .head(10)
+            .reset_index()
+        )
 
-    st.plotly_chart(
-        fig4,
-        use_container_width=True
-    )
+        top_companies.columns = [
+            "Company",
+            "Listings"
+        ]
 
-# ---------------------------------------------------
-# TAB 3 — APPLICATION INSIGHTS
-# ---------------------------------------------------
+        fig3 = px.bar(
+            top_companies,
+            x="Listings",
+            y="Company",
+            orientation="h"
+        )
 
-with tab3:
+        fig3.update_layout(
+            height=500,
+            yaxis=dict(
+                categoryorder="total ascending"
+            )
+        )
+
+        st.plotly_chart(
+            fig3,
+            use_container_width=True
+        )
+
+    with right:
+
+        st.subheader("Hiring Locations")
+
+        top_locations = (
+            df["Location"]
+            .value_counts()
+            .head(12)
+            .reset_index()
+        )
+
+        top_locations.columns = [
+            "Location",
+            "Listings"
+        ]
+
+        fig4 = px.treemap(
+            top_locations,
+            path=["Location"],
+            values="Listings"
+        )
+
+        fig4.update_layout(
+            height=500
+        )
+
+        st.plotly_chart(
+            fig4,
+            use_container_width=True
+        )
+
+# =====================================================
+# APPLICATION INSIGHTS
+# =====================================================
+
+with insights_tab:
 
     st.subheader("Top Recommended Opportunities")
 
-    recommended_df = df.sort_values(
-        by="Hiring Intent Score",
-        ascending=False
-    ).head(10)
+    recommended_df = (
+        df.sort_values(
+            by="Hiring Score",
+            ascending=False
+        )
+        .head(10)
+        .reset_index(drop=True)
+    )
 
     st.dataframe(
         recommended_df[
@@ -501,21 +594,23 @@ with tab3:
                 "Title",
                 "Company",
                 "Location",
-                "Hiring Intent Score",
+                "Hiring Score",
                 "Freshness",
                 "Competition",
-                "Description Quality",
                 "Recommendation"
             ]
         ],
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
-    st.subheader("Competition Analysis")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    st.subheader("Competition Landscape")
 
     fig5 = px.scatter(
         df,
-        x="Hiring Intent Score",
+        x="Hiring Score",
         y="Days Old",
         color="Competition",
         hover_data=[
@@ -524,48 +619,21 @@ with tab3:
         ]
     )
 
+    fig5.update_layout(
+        height=500
+    )
+
     st.plotly_chart(
         fig5,
         use_container_width=True
     )
 
-# ---------------------------------------------------
-# TAB 4 — JOB LISTINGS
-# ---------------------------------------------------
-
-with tab4:
-
-    st.subheader("Complete Job Listings")
-
-    st.dataframe(
-        df,
-        use_container_width=True
-    )
-
-# ---------------------------------------------------
-# FOOTER INSIGHTS
-# ---------------------------------------------------
+# =====================================================
+# FOOTER
+# =====================================================
 
 st.divider()
 
-st.subheader("Platform Recommendations")
-
-high_priority = len(
-    df[
-        df["Recommendation"]
-        ==
-        "Apply Immediately"
-    ]
-)
-
-st.success(
-    f"{high_priority} opportunities currently demonstrate strong hiring intent and recruiter activity signals."
-)
-
-st.write(
-    "Recently posted roles with high-detail descriptions tend to indicate stronger recruiter engagement probability."
-)
-
-st.write(
-    "Job freshness and description depth appear to correlate strongly with hiring confidence signals."
+st.caption(
+    "RolePulse analyzes live hiring signals from public job market data to identify recruiter intent, freshness, and market activity trends."
 )
