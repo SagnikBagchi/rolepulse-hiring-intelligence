@@ -736,7 +736,7 @@ except:
     df["Hiring Score"] = 50
 
 # =========================================================
-# RESUME ANALYSIS
+# RESUME ANALYSIS (FIXED UTF-8 / ENCODING SAFE)
 # =========================================================
 
 resume_score = None
@@ -747,13 +747,57 @@ if uploaded_resume:
 
     try:
 
-        resume_text = uploaded_resume.read().decode(
-            "utf-8"
+        # -------------------------------------------------
+        # READ FILE SAFELY
+        # -------------------------------------------------
+
+        raw_data = uploaded_resume.read()
+
+        # -------------------------------------------------
+        # TRY MULTIPLE ENCODINGS
+        # -------------------------------------------------
+
+        try:
+
+            resume_text = raw_data.decode("utf-8")
+
+        except UnicodeDecodeError:
+
+            try:
+
+                resume_text = raw_data.decode("latin-1")
+
+            except:
+
+                resume_text = raw_data.decode(
+                    "cp1252",
+                    errors="ignore"
+                )
+
+        # -------------------------------------------------
+        # CLEAN TEXT
+        # -------------------------------------------------
+
+        resume_text = re.sub(
+
+            r'[^A-Za-z0-9.,:/+\\-\\n ]',
+
+            ' ',
+
+            resume_text
         )
+
+        # -------------------------------------------------
+        # EXTRACT SKILLS
+        # -------------------------------------------------
 
         resume_skills = extract_skills(
             resume_text
         )
+
+        # -------------------------------------------------
+        # MARKET SKILLS
+        # -------------------------------------------------
 
         market_skills = [
 
@@ -761,6 +805,10 @@ if uploaded_resume:
             for skill, count
             in Counter(all_skills).most_common(10)
         ]
+
+        # -------------------------------------------------
+        # MATCH CALCULATION
+        # -------------------------------------------------
 
         matched = set(
             resume_skills
@@ -779,6 +827,10 @@ if uploaded_resume:
             1
         )
 
+        # -------------------------------------------------
+        # MISSING SKILLS
+        # -------------------------------------------------
+
         missing_skills = list(
 
             set(market_skills)
@@ -789,9 +841,8 @@ if uploaded_resume:
     except Exception as e:
 
         st.warning(
-            f"Resume parsing issue: {e}"
+            f"Resume parsing failed safely: {str(e)}"
         )
-
 # =========================================================
 # METRICS
 # =========================================================
