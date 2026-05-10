@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
-import plotly.graph_objects as go
 from collections import Counter
 from datetime import datetime, timezone
 import re
@@ -247,7 +246,6 @@ def extract_experience(text):
         if match:
 
             if len(match.groups()) == 2:
-
                 return f"{match.group(1)}-{match.group(2)} Years"
 
             return f"{match.group(1)}+ Years"
@@ -270,22 +268,13 @@ def get_freshness(days):
 
 st.sidebar.title("Search Intelligence")
 
-role_options = [
-
-    "Product Manager",
-    "Associate Product Manager",
-    "AI Product Manager",
-    "Product Analyst",
-    "Business Analyst",
-    "Data Analyst",
-    "Software Engineer"
-]
-
-keyword = st.sidebar.selectbox(
+keyword = st.sidebar.text_input(
 
     "Role",
 
-    role_options
+    value="Product Manager",
+
+    placeholder="Enter role title..."
 )
 
 results_count = st.sidebar.slider(
@@ -342,111 +331,119 @@ all_skills = []
 # ADZUNA
 # =========================================================
 
-adzuna_url = "https://api.adzuna.com/v1/api/jobs/in/search/1"
+try:
 
-params = {
+    adzuna_url = "https://api.adzuna.com/v1/api/jobs/in/search/1"
 
-    "app_id": APP_ID,
-    "app_key": APP_KEY,
-    "results_per_page": results_count,
-    "what": keyword,
-    "where": "India",
-    "content-type": "application/json"
-}
+    params = {
 
-response = requests.get(
-    adzuna_url,
-    params=params
-)
+        "app_id": APP_ID,
+        "app_key": APP_KEY,
+        "results_per_page": results_count,
+        "what": keyword,
+        "where": "India",
+        "content-type": "application/json"
+    }
 
-data = response.json()
+    response = requests.get(
+        adzuna_url,
+        params=params
+    )
 
-for job in data.get("results", []):
+    data = response.json()
 
-    title = str(job.get("title", ""))
+    for job in data.get("results", []):
 
-    description = str(job.get("description", ""))
+        title = str(job.get("title", ""))
 
-    combined = (title + " " + description).lower()
+        description = str(job.get("description", ""))
 
-    if keyword.lower() not in combined:
-        continue
+        combined = (
+            title + " " + description
+        ).lower()
 
-    skills = extract_skills(description)
+        if keyword.lower() not in combined:
+            continue
 
-    all_skills.extend(skills)
+        skills = extract_skills(description)
 
-    created = job.get("created")
+        all_skills.extend(skills)
 
-    try:
+        created = job.get("created")
 
-        created_date = datetime.strptime(
-            created,
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        try:
 
-        days_old = (
-
-            datetime.now(timezone.utc)
-            -
-            created_date.replace(
-                tzinfo=timezone.utc
+            created_date = datetime.strptime(
+                created,
+                "%Y-%m-%dT%H:%M:%SZ"
             )
 
-        ).days
+            days_old = (
 
-    except:
+                datetime.now(timezone.utc)
+                -
+                created_date.replace(
+                    tzinfo=timezone.utc
+                )
 
-        days_old = 15
+            ).days
 
-    work_mode = "Onsite"
+        except:
 
-    if "remote" in description.lower():
-        work_mode = "Remote"
+            days_old = 15
 
-    elif "hybrid" in description.lower():
-        work_mode = "Hybrid"
+        work_mode = "Onsite"
 
-    jobs.append({
+        if "remote" in description.lower():
+            work_mode = "Remote"
 
-        "Title": title,
+        elif "hybrid" in description.lower():
+            work_mode = "Hybrid"
 
-        "Company": job.get(
-            "company",
-            {}
-        ).get(
-            "display_name",
-            "Unknown"
-        ),
+        jobs.append({
 
-        "Location": job.get(
-            "location",
-            {}
-        ).get(
-            "display_name",
-            "India"
-        ),
+            "Title": title,
 
-        "Platform": "Adzuna",
+            "Company": job.get(
+                "company",
+                {}
+            ).get(
+                "display_name",
+                "Unknown"
+            ),
 
-        "Work Mode": work_mode,
+            "Location": job.get(
+                "location",
+                {}
+            ).get(
+                "display_name",
+                "India"
+            ),
 
-        "Experience": extract_experience(
-            description
-        ),
+            "Platform": "Adzuna",
 
-        "Freshness": get_freshness(
-            days_old
-        ),
+            "Work Mode": work_mode,
 
-        "Days Old": days_old,
+            "Experience": extract_experience(
+                description
+            ),
 
-        "Skills": ", ".join(skills),
+            "Freshness": get_freshness(
+                days_old
+            ),
 
-        "Description": description,
+            "Days Old": days_old,
 
-        "URL": job.get("redirect_url")
-    })
+            "Skills": ", ".join(skills),
+
+            "Description": description,
+
+            "URL": job.get("redirect_url")
+        })
+
+except Exception as e:
+
+    st.warning(f"Adzuna API issue: {e}")
 
 # =========================================================
 # REMOTEOK
@@ -509,8 +506,9 @@ try:
             "URL": f"https://remoteok.com{job.get('url','')}"
         })
 
-except:
-    pass
+except Exception as e:
+
+    st.warning(f"RemoteOK API issue: {e}")
 
 # =========================================================
 # GREENHOUSE
@@ -582,53 +580,122 @@ for company in companies:
                 "URL": job.get("absolute_url")
             })
 
-    except:
-        pass
+    except Exception as e:
+
+        st.warning(f"{company} API issue: {e}")
 
 # =========================================================
 # DATAFRAME
 # =========================================================
 
-df = pd.DataFrame(jobs)
+try:
 
-if df.empty:
+    df = pd.DataFrame(jobs)
 
-    st.warning("No matching jobs found.")
+except Exception as e:
+
+    st.error(
+        f"Error creating dataframe: {e}"
+    )
 
     st.stop()
 
 # =========================================================
-# FILTERS
+# EMPTY DATAFRAME HANDLING
 # =========================================================
 
-df = df[
-    df["Work Mode"].isin(
-        workmode_filter
+if df.empty:
+
+    st.warning(
+        "No matching jobs found."
     )
+
+    st.stop()
+
+# =========================================================
+# REQUIRED COLUMNS SAFETY
+# =========================================================
+
+required_columns = [
+
+    "Title",
+    "Company",
+    "Platform",
+    "Work Mode",
+    "Freshness",
+    "Skills"
 ]
 
-df = df[
-    df["Platform"].isin(
-        platform_filter
-    )
-]
+for col in required_columns:
 
-df = df[
-    df["Freshness"].isin(
-        freshness_filter
+    if col not in df.columns:
+
+        df[col] = "Not Available"
+
+# =========================================================
+# SAFE FILTERS
+# =========================================================
+
+try:
+
+    if "Work Mode" in df.columns:
+
+        df = df[
+            df["Work Mode"].isin(
+                workmode_filter
+            )
+        ]
+
+    if "Platform" in df.columns:
+
+        df = df[
+            df["Platform"].isin(
+                platform_filter
+            )
+        ]
+
+    if "Freshness" in df.columns:
+
+        df = df[
+            df["Freshness"].isin(
+                freshness_filter
+            )
+        ]
+
+except Exception as e:
+
+    st.error(
+        f"Filtering error: {e}"
     )
-]
+
+# =========================================================
+# EMPTY FILTER RESULT
+# =========================================================
+
+if df.empty:
+
+    st.warning(
+        "No jobs available after applying filters."
+    )
+
+    st.stop()
 
 # =========================================================
 # DUPLICATES
 # =========================================================
 
-df["Duplicate"] = df.duplicated(
+try:
 
-    subset=["Title", "Company"],
+    df["Duplicate"] = df.duplicated(
 
-    keep=False
-)
+        subset=["Title", "Company"],
+
+        keep=False
+    )
+
+except:
+
+    df["Duplicate"] = False
 
 # =========================================================
 # HIRING SCORE
@@ -638,75 +705,92 @@ def score(row):
 
     value = 50
 
-    if row["Work Mode"] == "Remote":
-        value += 10
+    try:
 
-    if row["Freshness"] == "Fresh":
-        value += 15
+        if row.get("Work Mode") == "Remote":
+            value += 10
 
-    if row["Duplicate"]:
-        value += 5
+        if row.get("Freshness") == "Fresh":
+            value += 15
 
-    if len(str(row["Skills"])) > 10:
-        value += 10
+        if row.get("Duplicate") == True:
+            value += 5
+
+        if len(str(row.get("Skills", ""))) > 10:
+            value += 10
+
+    except:
+        pass
 
     return min(value, 100)
 
-df["Hiring Score"] = df.apply(
-    score,
-    axis=1
-)
+try:
+
+    df["Hiring Score"] = df.apply(
+        score,
+        axis=1
+    )
+
+except:
+
+    df["Hiring Score"] = 50
 
 # =========================================================
 # RESUME ANALYSIS
 # =========================================================
 
 resume_score = None
-
 resume_skills = []
-
 missing_skills = []
 
 if uploaded_resume:
 
-    resume_text = uploaded_resume.read().decode(
-        "utf-8"
-    )
+    try:
 
-    resume_skills = extract_skills(
-        resume_text
-    )
+        resume_text = uploaded_resume.read().decode(
+            "utf-8"
+        )
 
-    market_skills = [
+        resume_skills = extract_skills(
+            resume_text
+        )
 
-        skill
-        for skill, count
-        in Counter(all_skills).most_common(10)
-    ]
+        market_skills = [
 
-    matched = set(
-        resume_skills
-    ).intersection(
-        set(market_skills)
-    )
+            skill
+            for skill, count
+            in Counter(all_skills).most_common(10)
+        ]
 
-    resume_score = round(
+        matched = set(
+            resume_skills
+        ).intersection(
+            set(market_skills)
+        )
 
-        (
-            len(matched)
-            /
-            max(len(market_skills), 1)
-        ) * 100,
+        resume_score = round(
 
-        1
-    )
+            (
+                len(matched)
+                /
+                max(len(market_skills), 1)
+            ) * 100,
 
-    missing_skills = list(
+            1
+        )
 
-        set(market_skills)
-        -
-        set(resume_skills)
-    )
+        missing_skills = list(
+
+            set(market_skills)
+            -
+            set(resume_skills)
+        )
+
+    except Exception as e:
+
+        st.warning(
+            f"Resume parsing issue: {e}"
+        )
 
 # =========================================================
 # METRICS
@@ -751,37 +835,93 @@ m5.metric(
 # AI INSIGHTS
 # =========================================================
 
-top_skill = Counter(all_skills).most_common(1)
+st.markdown("## AI Hiring Insights")
 
-top_company = (
+if len(df) > 0:
 
-    df["Company"]
-    .value_counts()
-    .idxmax()
-)
+    try:
 
-st.info(
+        top_skill_data = Counter(
+            all_skills
+        ).most_common(1)
 
-    f"""
-    AI Hiring Insights
+        top_skill = (
 
-    • Most demanded skill: {top_skill[0][0] if top_skill else 'N/A'}
+            top_skill_data[0][0]
+            if top_skill_data
+            else "N/A"
+        )
 
-    • Most active recruiter: {top_company}
+    except:
 
-    • Remote hiring trend remains dominant.
+        top_skill = "N/A"
 
-    • Greenhouse startup hiring is increasing.
-    """
-)
+    try:
+
+        if not df["Company"].empty:
+
+            top_company = (
+
+                df["Company"]
+                .value_counts()
+                .idxmax()
+            )
+
+        else:
+
+            top_company = "N/A"
+
+    except:
+
+        top_company = "N/A"
+
+    remote_roles = len(
+
+        df[
+            df["Work Mode"]
+            ==
+            "Remote"
+        ]
+    )
+
+    total_roles = len(df)
+
+    remote_pct = round(
+
+        (remote_roles / total_roles) * 100,
+
+        1
+    ) if total_roles > 0 else 0
+
+    st.info(
+
+        f"""
+        • Most demanded skill: {top_skill}
+
+        • Most active recruiter: {top_company}
+
+        • Remote job share: {remote_pct}%
+
+        • Live jobs aggregated from:
+          Adzuna, RemoteOK, Greenhouse
+        """
+    )
+
+else:
+
+    st.warning(
+        "No insights available."
+    )
 
 # =========================================================
-# RESUME SECTION
+# RESUME MATCH
 # =========================================================
 
-if uploaded_resume:
+if uploaded_resume and resume_score is not None:
 
-    st.markdown("## Resume Match Intelligence")
+    st.markdown(
+        "## Resume Match Intelligence"
+    )
 
     c1, c2 = st.columns(2)
 
@@ -792,37 +932,39 @@ if uploaded_resume:
             f"{resume_score}%"
         )
 
-        skill_match = pd.DataFrame({
+        if len(resume_skills) > 0:
 
-            "Skill": resume_skills,
+            skill_match = pd.DataFrame({
 
-            "Match": [1]*len(resume_skills)
-        })
+                "Skill": resume_skills,
 
-        fig = px.bar(
+                "Count": [1] * len(resume_skills)
+            })
 
-            skill_match,
+            fig = px.bar(
 
-            x="Skill",
+                skill_match,
 
-            y="Match",
+                x="Skill",
 
-            color="Skill"
-        )
+                y="Count",
 
-        fig.update_layout(
+                color="Skill"
+            )
 
-            paper_bgcolor='rgba(0,0,0,0)',
+            fig.update_layout(
 
-            plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
 
-            font_color='white'
-        )
+                plot_bgcolor='rgba(0,0,0,0)',
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
+                font_color='white'
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True
+            )
 
     with c2:
 
@@ -830,9 +972,17 @@ if uploaded_resume:
             "### Missing Market Skills"
         )
 
-        for skill in missing_skills:
+        if len(missing_skills) > 0:
 
-            st.write(f"• {skill}")
+            for skill in missing_skills:
+
+                st.write(f"• {skill}")
+
+        else:
+
+            st.success(
+                "Strong skill alignment detected."
+            )
 
 # =========================================================
 # TABS
@@ -851,81 +1001,83 @@ overview_tab, trends_tab, jobs_tab = st.tabs([
 
 with overview_tab:
 
-    left, right = st.columns(2)
+    if not df.empty:
 
-    with left:
+        left, right = st.columns(2)
 
-        platform_df = (
+        with left:
 
-            df["Platform"]
-            .value_counts()
-            .reset_index()
-        )
+            platform_df = (
 
-        fig1 = px.pie(
+                df["Platform"]
+                .value_counts()
+                .reset_index()
+            )
 
-            platform_df,
+            fig1 = px.pie(
 
-            names="Platform",
+                platform_df,
 
-            values="count",
+                names="Platform",
 
-            hole=0.6,
+                values="count",
 
-            color_discrete_sequence=[
-                "#3b82f6",
-                "#8b5cf6",
-                "#06b6d4"
-            ]
-        )
+                hole=0.6,
 
-        fig1.update_layout(
+                color_discrete_sequence=[
+                    "#3b82f6",
+                    "#8b5cf6",
+                    "#06b6d4"
+                ]
+            )
 
-            paper_bgcolor='rgba(0,0,0,0)',
+            fig1.update_layout(
 
-            font_color='white'
-        )
+                paper_bgcolor='rgba(0,0,0,0)',
 
-        st.plotly_chart(
-            fig1,
-            use_container_width=True
-        )
+                font_color='white'
+            )
 
-    with right:
+            st.plotly_chart(
+                fig1,
+                use_container_width=True
+            )
 
-        work_df = (
+        with right:
 
-            df["Work Mode"]
-            .value_counts()
-            .reset_index()
-        )
+            work_df = (
 
-        fig2 = px.bar(
+                df["Work Mode"]
+                .value_counts()
+                .reset_index()
+            )
 
-            work_df,
+            fig2 = px.bar(
 
-            x="Work Mode",
+                work_df,
 
-            y="count",
+                x="Work Mode",
 
-            color="count",
+                y="count",
 
-            color_continuous_scale="Turbo"
-        )
+                color="count",
 
-        fig2.update_layout(
+                color_continuous_scale="Turbo"
+            )
 
-            paper_bgcolor='rgba(0,0,0,0)',
+            fig2.update_layout(
 
-            plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
 
-            font_color='white'
-        )
+                plot_bgcolor='rgba(0,0,0,0)',
 
-        st.plotly_chart(
-            fig2,
-            use_container_width=True
-        )
+                font_color='white'
+            )
+
+            st.plotly_chart(
+                fig2,
+                use_container_width=True
+            )
 
 # =========================================================
 # TRENDS
@@ -933,89 +1085,95 @@ with overview_tab:
 
 with trends_tab:
 
-    left, right = st.columns(2)
+    if not df.empty:
 
-    with left:
+        left, right = st.columns(2)
 
-        company_df = (
+        with left:
 
-            df["Company"]
-            .value_counts()
-            .head(10)
-            .reset_index()
-        )
+            company_df = (
 
-        fig3 = px.bar(
+                df["Company"]
+                .value_counts()
+                .head(10)
+                .reset_index()
+            )
 
-            company_df,
+            fig3 = px.bar(
 
-            x="count",
+                company_df,
 
-            y="Company",
+                x="count",
 
-            orientation="h",
+                y="Company",
 
-            color="count",
+                orientation="h",
 
-            color_continuous_scale="Viridis"
-        )
+                color="count",
 
-        fig3.update_layout(
+                color_continuous_scale="Viridis"
+            )
 
-            paper_bgcolor='rgba(0,0,0,0)',
+            fig3.update_layout(
 
-            plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
 
-            font_color='white'
-        )
+                plot_bgcolor='rgba(0,0,0,0)',
 
-        st.plotly_chart(
-            fig3,
-            use_container_width=True
-        )
+                font_color='white'
+            )
 
-    with right:
+            st.plotly_chart(
+                fig3,
+                use_container_width=True
+            )
 
-        skill_counter = Counter(all_skills)
+        with right:
 
-        skill_df = pd.DataFrame(
+            skill_counter = Counter(
+                all_skills
+            )
 
-            skill_counter.items(),
+            skill_df = pd.DataFrame(
 
-            columns=["Skill", "Count"]
+                skill_counter.items(),
 
-        ).sort_values(
+                columns=["Skill", "Count"]
 
-            by="Count",
+            ).sort_values(
 
-            ascending=False
+                by="Count",
 
-        ).head(10)
+                ascending=False
 
-        fig4 = px.treemap(
+            ).head(10)
 
-            skill_df,
+            if not skill_df.empty:
 
-            path=["Skill"],
+                fig4 = px.treemap(
 
-            values="Count",
+                    skill_df,
 
-            color="Count",
+                    path=["Skill"],
 
-            color_continuous_scale="Turbo"
-        )
+                    values="Count",
 
-        fig4.update_layout(
+                    color="Count",
 
-            paper_bgcolor='rgba(0,0,0,0)',
+                    color_continuous_scale="Turbo"
+                )
 
-            font_color='white'
-        )
+                fig4.update_layout(
 
-        st.plotly_chart(
-            fig4,
-            use_container_width=True
-        )
+                    paper_bgcolor='rgba(0,0,0,0)',
+
+                    font_color='white'
+                )
+
+                st.plotly_chart(
+                    fig4,
+                    use_container_width=True
+                )
 
 # =========================================================
 # JOB EXPLORER
@@ -1023,72 +1181,88 @@ with trends_tab:
 
 with jobs_tab:
 
-    st.markdown("## Top Opportunities")
-
-    df = df.sort_values(
-        by="Hiring Score",
-        ascending=False
+    st.markdown(
+        "## Top Opportunities"
     )
 
-    for index, row in df.iterrows():
+    if df.empty:
 
-        logo = f"https://logo.clearbit.com/{row['Company'].replace(' ','').lower()}.com"
+        st.warning(
+            "No jobs available."
+        )
 
-        with st.expander(
+    else:
 
-            f"{row['Title']} • {row['Company']} • {row['Hiring Score']} Score"
-        ):
+        df = df.sort_values(
+            by="Hiring Score",
+            ascending=False
+        )
 
-            c1, c2 = st.columns([1,4])
+        for _, row in df.iterrows():
 
-            with c1:
+            logo = f"https://logo.clearbit.com/{row['Company'].replace(' ','').lower()}.com"
 
-                st.image(
-                    logo,
-                    width=70
-                )
+            with st.expander(
 
-            with c2:
+                f"{row['Title']} • {row['Company']} • {row['Hiring Score']} Score"
+            ):
 
-                st.markdown(
-                    f"### {row['Title']}"
-                )
+                c1, c2 = st.columns([1,4])
 
-                st.write(
-                    f"**Company:** {row['Company']}"
-                )
+                with c1:
 
-                st.write(
-                    f"**Platform:** {row['Platform']}"
-                )
+                    try:
 
-                st.write(
-                    f"**Location:** {row['Location']}"
-                )
+                        st.image(
+                            logo,
+                            width=70
+                        )
 
-                st.write(
-                    f"**Work Mode:** {row['Work Mode']}"
-                )
+                    except:
 
-                st.write(
-                    f"**Experience:** {row['Experience']}"
-                )
+                        pass
 
-                st.write(
-                    f"**Freshness:** {row['Freshness']}"
-                )
+                with c2:
 
-                st.write(
-                    f"**Skills:** {row['Skills']}"
-                )
+                    st.markdown(
+                        f"### {row['Title']}"
+                    )
 
-                st.write(
-                    f"**Duplicate Listing:** {row['Duplicate']}"
-                )
+                    st.write(
+                        f"**Company:** {row['Company']}"
+                    )
 
-                st.markdown(
-                    f"[Apply Here]({row['URL']})"
-                )
+                    st.write(
+                        f"**Platform:** {row['Platform']}"
+                    )
+
+                    st.write(
+                        f"**Location:** {row['Location']}"
+                    )
+
+                    st.write(
+                        f"**Work Mode:** {row['Work Mode']}"
+                    )
+
+                    st.write(
+                        f"**Experience:** {row['Experience']}"
+                    )
+
+                    st.write(
+                        f"**Freshness:** {row['Freshness']}"
+                    )
+
+                    st.write(
+                        f"**Skills:** {row['Skills']}"
+                    )
+
+                    st.write(
+                        f"**Duplicate Listing:** {row['Duplicate']}"
+                    )
+
+                    st.markdown(
+                        f"[Apply Here]({row['URL']})"
+                    )
 
 # =========================================================
 # FOOTER
