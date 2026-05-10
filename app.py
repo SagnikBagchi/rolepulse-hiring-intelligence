@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# CUSTOM CSS
+# CUSTOM STYLING
 # ---------------------------------------------------
 
 st.markdown("""
@@ -86,6 +86,10 @@ salary_filter = st.sidebar.slider(
     step=50000
 )
 
+show_salary_only = st.sidebar.checkbox(
+    "Show only jobs with salary disclosed"
+)
+
 # ---------------------------------------------------
 # API REQUEST
 # ---------------------------------------------------
@@ -102,6 +106,7 @@ params = {
 }
 
 response = requests.get(url, params=params)
+
 data = response.json()
 
 # ---------------------------------------------------
@@ -156,11 +161,19 @@ for job in data.get("results", []):
     )
 
     # ---------------------------------------------------
+    # SALARY TRANSPARENCY
+    # ---------------------------------------------------
+
+    salary_disclosed = (
+        salary_min > 0
+        or salary_max > 0
+    )
+
+    # ---------------------------------------------------
     # FRESHNESS DETECTION
     # ---------------------------------------------------
 
     freshness = "Unknown"
-    freshness_score = 50
     days_old = None
 
     try:
@@ -180,21 +193,18 @@ for job in data.get("results", []):
 
         if days_old <= 7:
             freshness = "Fresh"
-            freshness_score = 100
 
         elif days_old <= 30:
             freshness = "Moderate"
-            freshness_score = 70
 
         else:
             freshness = "Possibly Stale"
-            freshness_score = 40
 
     except:
-        pass
+        freshness = "Unknown"
 
     # ---------------------------------------------------
-    # COMPETITION LOGIC
+    # COMPETITION ESTIMATION
     # ---------------------------------------------------
 
     competition = "Medium"
@@ -211,7 +221,7 @@ for job in data.get("results", []):
 
     score = 50
 
-    if salary_min > 0:
+    if salary_disclosed:
         score += 15
 
     if len(description) > 800:
@@ -229,7 +239,7 @@ for job in data.get("results", []):
     score = min(score, 100)
 
     # ---------------------------------------------------
-    # APPLICATION RECOMMENDATION
+    # APPLICATION PRIORITY
     # ---------------------------------------------------
 
     if score >= 85:
@@ -251,6 +261,7 @@ for job in data.get("results", []):
         "Location": location_name,
         "Salary Min": salary_min,
         "Salary Max": salary_max,
+        "Salary Disclosed": salary_disclosed,
         "Hiring Intent Score": score,
         "Freshness": freshness,
         "Competition": competition,
@@ -264,26 +275,53 @@ for job in data.get("results", []):
 # DATAFRAME
 # ---------------------------------------------------
 
-df = pd.DataFrame(jobs)
+expected_columns = [
+    "Title",
+    "Company",
+    "Location",
+    "Salary Min",
+    "Salary Max",
+    "Salary Disclosed",
+    "Hiring Intent Score",
+    "Freshness",
+    "Competition",
+    "Recommendation",
+    "Days Old",
+    "Job Link"
+]
+
+df = pd.DataFrame(
+    jobs,
+    columns=expected_columns
+)
 
 # ---------------------------------------------------
-# SALARY FILTER
+# FILTERS
 # ---------------------------------------------------
 
-if salary_filter > 0:
+if not df.empty:
 
-    df = df[
-        df["Salary Max"] >= salary_filter
-    ]
+    if salary_filter > 0:
+
+        df = df[
+            df["Salary Max"].fillna(0)
+            >= salary_filter
+        ]
+
+    if show_salary_only:
+
+        df = df[
+            df["Salary Disclosed"] == True
+        ]
 
 # ---------------------------------------------------
-# EMPTY DATAFRAME HANDLING
+# EMPTY CHECK
 # ---------------------------------------------------
 
 if df.empty:
 
     st.warning(
-        "No job listings matched the selected filters. Try adjusting the minimum salary or changing the role/location."
+        "No job listings matched the selected filters. Try adjusting your filters or search query."
     )
 
     st.stop()
@@ -307,6 +345,13 @@ fresh_jobs = len(
     df[df["Freshness"] == "Fresh"]
 )
 
+salary_transparency_rate = round(
+    (
+        df["Salary Disclosed"].mean()
+    ) * 100,
+    1
+)
+
 st.subheader("Executive Market Insights")
 
 st.info(
@@ -315,7 +360,9 @@ st.info(
     
     {top_company} appears among the most active recruiters in the selected market.
     
-    {fresh_jobs} recently posted opportunities were identified with strong freshness signals.
+    {fresh_jobs} recently posted opportunities demonstrate strong freshness signals.
+    
+    Salary transparency across analyzed listings currently stands at {salary_transparency_rate}%.
     """
 )
 
@@ -341,8 +388,8 @@ col3.metric(
 )
 
 col4.metric(
-    "Companies Hiring",
-    df["Company"].nunique()
+    "Salary Transparency",
+    f"{salary_transparency_rate}%"
 )
 
 st.divider()
@@ -359,12 +406,12 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ---------------------------------------------------
-# OVERVIEW TAB
+# TAB 1 — OVERVIEW
 # ---------------------------------------------------
 
 with tab1:
 
-    st.subheader("Hiring Intent Score Distribution")
+    st.subheader("Hiring Intent Distribution")
 
     fig1 = px.histogram(
         df,
@@ -377,7 +424,7 @@ with tab1:
         use_container_width=True
     )
 
-    st.subheader("Freshness Analysis")
+    st.subheader("Freshness Distribution")
 
     fig2 = px.pie(
         df,
@@ -390,7 +437,7 @@ with tab1:
     )
 
 # ---------------------------------------------------
-# MARKET INTELLIGENCE TAB
+# TAB 2 — MARKET INTELLIGENCE
 # ---------------------------------------------------
 
 with tab2:
@@ -446,7 +493,7 @@ with tab2:
     )
 
 # ---------------------------------------------------
-# APPLICATION INSIGHTS TAB
+# TAB 3 — APPLICATION INSIGHTS
 # ---------------------------------------------------
 
 with tab3:
@@ -492,7 +539,7 @@ with tab3:
     )
 
 # ---------------------------------------------------
-# JOB LISTINGS TAB
+# TAB 4 — JOB LISTINGS
 # ---------------------------------------------------
 
 with tab4:
@@ -521,13 +568,13 @@ high_priority = len(
 )
 
 st.success(
-    f"{high_priority} opportunities currently show strong hiring intent and freshness indicators."
+    f"{high_priority} opportunities currently demonstrate strong hiring intent and recruiter activity signals."
 )
 
 st.write(
-    "Roles with salary transparency and detailed descriptions generally correlate with stronger hiring signals."
+    "Listings with salary transparency and detailed descriptions generally correlate with stronger hiring confidence."
 )
 
 st.write(
-    "Recently posted opportunities tend to demonstrate higher recruiter engagement probability."
+    "Recently posted roles tend to indicate higher recruiter engagement probability."
 )
