@@ -3,22 +3,22 @@ import pandas as pd
 import requests
 import plotly.express as px
 import plotly.graph_objects as go
-import re
-from datetime import datetime, timezone
 from collections import Counter
+from datetime import datetime, timezone
+import re
 
-# =====================================================
+# =========================================================
 # PAGE CONFIG
-# =====================================================
+# =========================================================
 
 st.set_page_config(
     page_title="RolePulse",
     layout="wide"
 )
 
-# =====================================================
-# APPLE-LIKE UI
-# =====================================================
+# =========================================================
+# PREMIUM UI
+# =========================================================
 
 st.markdown("""
 <style>
@@ -28,34 +28,48 @@ html, body, [class*="css"] {
 }
 
 .stApp {
-    background: linear-gradient(
+
+    background:
+    linear-gradient(
         180deg,
-        #0a0a0a 0%,
-        #111827 35%,
-        #0f172a 100%
+        #050816 0%,
+        #0f172a 35%,
+        #111827 100%
     );
+
     color: white;
 }
 
 .block-container {
+
     max-width: 1500px;
     padding-top: 2rem;
-    padding-bottom: 2rem;
+    padding-bottom: 3rem;
 }
 
-/* HEADER */
+/* SIDEBAR */
 
-.main-title {
+section[data-testid="stSidebar"] {
+
+    background: rgba(15,23,42,0.96);
+
+    border-right: 1px solid rgba(255,255,255,0.05);
+}
+
+/* TITLE */
+
+.hero-title {
+
     font-size: 4rem;
     font-weight: 700;
     letter-spacing: -2px;
-    margin-bottom: 0px;
+    margin-bottom: -10px;
 }
 
-.subtitle {
+.hero-subtitle {
+
     color: #94a3b8;
     font-size: 1.1rem;
-    margin-top: -10px;
 }
 
 /* METRIC CARDS */
@@ -66,11 +80,11 @@ html, body, [class*="css"] {
 
     border: 1px solid rgba(255,255,255,0.08);
 
-    border-radius: 24px;
-
     padding: 24px;
 
-    backdrop-filter: blur(18px);
+    border-radius: 24px;
+
+    backdrop-filter: blur(14px);
 
     box-shadow:
         0px 8px 30px rgba(0,0,0,0.35);
@@ -80,38 +94,31 @@ html, body, [class*="css"] {
 
 [data-testid="metric-container"]:hover {
 
-    transform: translateY(-6px);
+    transform: translateY(-5px);
 
-    border: 1px solid rgba(59,130,246,0.5);
-}
-
-/* SIDEBAR */
-
-section[data-testid="stSidebar"] {
-
-    background: rgba(15,23,42,0.95);
-
-    border-right: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid rgba(59,130,246,0.4);
 }
 
 /* TABS */
 
 .stTabs [data-baseweb="tab-list"] {
-    gap: 18px;
+
+    gap: 20px;
 }
 
 .stTabs [data-baseweb="tab"] {
 
     border-radius: 16px;
 
-    padding: 12px 22px;
-
     background: rgba(255,255,255,0.04);
+
+    padding: 12px 22px;
 }
 
 .stTabs [aria-selected="true"] {
 
-    background: linear-gradient(
+    background:
+    linear-gradient(
         90deg,
         #2563eb,
         #7c3aed
@@ -120,71 +127,70 @@ section[data-testid="stSidebar"] {
     color: white !important;
 }
 
-/* TABLE */
+/* EXPANDER */
 
-[data-testid="stDataFrame"] {
+.streamlit-expanderHeader {
 
-    border-radius: 20px;
-
-    overflow: hidden;
-
-    border: 1px solid rgba(255,255,255,0.06);
+    font-size: 1rem;
+    font-weight: 600;
 }
 
-/* BUTTONS */
+/* BUTTON */
 
 .stButton>button {
 
-    border-radius: 14px;
+    border-radius: 12px;
 
-    background: linear-gradient(
+    border: none;
+
+    color: white;
+
+    background:
+    linear-gradient(
         90deg,
         #2563eb,
         #7c3aed
     );
-
-    color: white;
-
-    border: none;
 }
 
-/* REMOVE DEFAULTS */
+/* REMOVE STREAMLIT DEFAULTS */
 
 #MainMenu,
 footer,
 header {
+
     visibility: hidden;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# =====================================================
+# =========================================================
 # HEADER
-# =====================================================
+# =========================================================
 
 st.markdown("""
-<div class='main-title'>
+<div class='hero-title'>
 RolePulse
 </div>
 
-<div class='subtitle'>
-Multi-Source Hiring Intelligence Platform
+<div class='hero-subtitle'>
+AI-Powered Multi-Source Hiring Intelligence Platform
 </div>
 """, unsafe_allow_html=True)
 
 st.divider()
 
-# =====================================================
+# =========================================================
 # API KEYS
-# =====================================================
+# =========================================================
 
 APP_ID = st.secrets["ADZUNA_APP_ID"]
 APP_KEY = st.secrets["ADZUNA_APP_KEY"]
 
-# =====================================================
-# SKILL ENGINE
-# =====================================================
+# =========================================================
+# SKILLS
+# =========================================================
 
 SKILLS = [
 
@@ -201,10 +207,14 @@ SKILLS = [
     "scrum",
     "ai",
     "machine learning",
-    "communication",
+    "stakeholder management",
     "roadmap",
-    "stakeholder management"
+    "communication"
 ]
+
+# =========================================================
+# HELPERS
+# =========================================================
 
 def extract_skills(text):
 
@@ -218,10 +228,6 @@ def extract_skills(text):
             found.append(skill.title())
 
     return found
-
-# =====================================================
-# EXPERIENCE ENGINE
-# =====================================================
 
 def extract_experience(text):
 
@@ -241,17 +247,136 @@ def extract_experience(text):
         if match:
 
             if len(match.groups()) == 2:
+
                 return f"{match.group(1)}-{match.group(2)} Years"
 
             return f"{match.group(1)}+ Years"
 
     return "Not Specified"
 
-# =====================================================
-# FRESHNESS ENGINE
-# =====================================================
+def get_freshness(days):
 
-def freshness_logic(created):
+    if days <= 7:
+        return "Fresh"
+
+    elif days <= 30:
+        return "Moderate"
+
+    return "Stale"
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+st.sidebar.title("Search Intelligence")
+
+role_options = [
+
+    "Product Manager",
+    "Associate Product Manager",
+    "AI Product Manager",
+    "Product Analyst",
+    "Business Analyst",
+    "Data Analyst",
+    "Software Engineer"
+]
+
+keyword = st.sidebar.selectbox(
+
+    "Role",
+
+    role_options
+)
+
+results_count = st.sidebar.slider(
+
+    "Listings",
+
+    10,
+    100,
+    50
+)
+
+workmode_filter = st.sidebar.multiselect(
+
+    "Work Mode",
+
+    ["Remote", "Onsite", "Hybrid"],
+
+    default=["Remote", "Onsite", "Hybrid"]
+)
+
+platform_filter = st.sidebar.multiselect(
+
+    "Platforms",
+
+    ["Adzuna", "RemoteOK", "Greenhouse"],
+
+    default=["Adzuna", "RemoteOK", "Greenhouse"]
+)
+
+freshness_filter = st.sidebar.multiselect(
+
+    "Freshness",
+
+    ["Fresh", "Moderate", "Stale"],
+
+    default=["Fresh", "Moderate", "Stale"]
+)
+
+uploaded_resume = st.sidebar.file_uploader(
+
+    "Upload Resume (.txt)",
+
+    type=["txt"]
+)
+
+# =========================================================
+# JOB STORAGE
+# =========================================================
+
+jobs = []
+all_skills = []
+
+# =========================================================
+# ADZUNA
+# =========================================================
+
+adzuna_url = "https://api.adzuna.com/v1/api/jobs/in/search/1"
+
+params = {
+
+    "app_id": APP_ID,
+    "app_key": APP_KEY,
+    "results_per_page": results_count,
+    "what": keyword,
+    "where": "India",
+    "content-type": "application/json"
+}
+
+response = requests.get(
+    adzuna_url,
+    params=params
+)
+
+data = response.json()
+
+for job in data.get("results", []):
+
+    title = str(job.get("title", ""))
+
+    description = str(job.get("description", ""))
+
+    combined = (title + " " + description).lower()
+
+    if keyword.lower() not in combined:
+        continue
+
+    skills = extract_skills(description)
+
+    all_skills.extend(skills)
+
+    created = job.get("created")
 
     try:
 
@@ -270,149 +395,9 @@ def freshness_logic(created):
 
         ).days
 
-        if days_old <= 7:
-            freshness = "Fresh"
-
-        elif days_old <= 30:
-            freshness = "Moderate"
-
-        else:
-            freshness = "Stale"
-
-        return freshness, days_old
-
     except:
 
-        return "Unknown", None
-
-# =====================================================
-# SIDEBAR
-# =====================================================
-
-st.sidebar.title("Search Intelligence")
-
-keyword = st.sidebar.text_input(
-    "Role",
-    value="Product Manager"
-)
-
-results_count = st.sidebar.slider(
-    "Listings",
-    10,
-    100,
-    50
-)
-
-platform_filter = st.sidebar.multiselect(
-
-    "Platforms",
-
-    [
-        "Adzuna",
-        "RemoteOK",
-        "Greenhouse"
-    ],
-
-    default=[
-        "Adzuna",
-        "RemoteOK",
-        "Greenhouse"
-    ]
-)
-
-workmode_filter = st.sidebar.multiselect(
-
-    "Work Mode",
-
-    [
-        "Remote",
-        "Onsite",
-        "Hybrid"
-    ],
-
-    default=[
-        "Remote",
-        "Onsite",
-        "Hybrid"
-    ]
-)
-
-freshness_filter = st.sidebar.multiselect(
-
-    "Listing Freshness",
-
-    [
-        "Fresh",
-        "Moderate",
-        "Stale"
-    ],
-
-    default=[
-        "Fresh",
-        "Moderate",
-        "Stale"
-    ]
-)
-
-uploaded_resume = st.sidebar.file_uploader(
-    "Upload Resume (.txt)",
-    type=["txt"]
-)
-
-# =====================================================
-# MASTER DATA
-# =====================================================
-
-jobs = []
-
-all_skills = []
-
-# =====================================================
-# ADZUNA API
-# =====================================================
-
-adzuna_url = "https://api.adzuna.com/v1/api/jobs/in/search/1"
-
-adzuna_params = {
-
-    "app_id": APP_ID,
-    "app_key": APP_KEY,
-    "results_per_page": results_count,
-    "what": keyword,
-    "where": "India",
-    "content-type": "application/json"
-}
-
-response = requests.get(
-    adzuna_url,
-    params=adzuna_params
-)
-
-adzuna_data = response.json()
-
-for job in adzuna_data.get("results", []):
-
-    description = str(
-        job.get("description", "")
-    )
-
-    skills = extract_skills(description)
-
-    all_skills.extend(skills)
-
-    freshness, days_old = freshness_logic(
-        job.get("created", "")
-    )
-
-    title = job.get("title", "")
-
-    company = job.get(
-        "company",
-        {}
-    ).get(
-        "display_name",
-        "Unknown"
-    )
+        days_old = 15
 
     work_mode = "Onsite"
 
@@ -426,7 +411,13 @@ for job in adzuna_data.get("results", []):
 
         "Title": title,
 
-        "Company": company,
+        "Company": job.get(
+            "company",
+            {}
+        ).get(
+            "display_name",
+            "Unknown"
+        ),
 
         "Location": job.get(
             "location",
@@ -444,32 +435,45 @@ for job in adzuna_data.get("results", []):
             description
         ),
 
-        "Freshness": freshness,
+        "Freshness": get_freshness(
+            days_old
+        ),
 
         "Days Old": days_old,
 
         "Skills": ", ".join(skills),
 
+        "Description": description,
+
         "URL": job.get("redirect_url")
     })
 
-# =====================================================
-# REMOTEOK API
-# =====================================================
+# =========================================================
+# REMOTEOK
+# =========================================================
 
 try:
 
-    remote_response = requests.get(
+    remote_jobs = requests.get(
         "https://remoteok.com/api"
-    )
+    ).json()[1:]
 
-    remote_jobs = remote_response.json()[1:]
+    for job in remote_jobs:
 
-    for job in remote_jobs[:25]:
+        title = str(
+            job.get("position", "")
+        )
 
         description = str(
             job.get("description", "")
         )
+
+        combined = (
+            title + " " + description
+        ).lower()
+
+        if keyword.lower() not in combined:
+            continue
 
         skills = extract_skills(description)
 
@@ -477,7 +481,7 @@ try:
 
         jobs.append({
 
-            "Title": job.get("position"),
+            "Title": title,
 
             "Company": job.get(
                 "company",
@@ -496,9 +500,11 @@ try:
 
             "Freshness": "Fresh",
 
-            "Days Old": 1,
+            "Days Old": 2,
 
             "Skills": ", ".join(skills),
+
+            "Description": description,
 
             "URL": f"https://remoteok.com{job.get('url','')}"
         })
@@ -506,11 +512,11 @@ try:
 except:
     pass
 
-# =====================================================
-# GREENHOUSE API
-# =====================================================
+# =========================================================
+# GREENHOUSE
+# =========================================================
 
-greenhouse_companies = [
+companies = [
 
     "notion",
     "stripe",
@@ -518,23 +524,32 @@ greenhouse_companies = [
     "scaleai"
 ]
 
-for company in greenhouse_companies:
+for company in companies:
 
     try:
 
-        greenhouse_url = f"https://boards-api.greenhouse.io/v1/boards/{company}/jobs"
+        url = f"https://boards-api.greenhouse.io/v1/boards/{company}/jobs"
 
-        response = requests.get(
-            greenhouse_url
-        )
+        response = requests.get(url)
 
         data = response.json()
 
-        for job in data.get("jobs", [])[:15]:
+        for job in data.get("jobs", []):
+
+            title = str(
+                job.get("title", "")
+            )
 
             description = str(
                 job.get("content", "")
             )
+
+            combined = (
+                title + " " + description
+            ).lower()
+
+            if keyword.lower() not in combined:
+                continue
 
             skills = extract_skills(description)
 
@@ -542,7 +557,7 @@ for company in greenhouse_companies:
 
             jobs.append({
 
-                "Title": job.get("title"),
+                "Title": title,
 
                 "Company": company.title(),
 
@@ -558,9 +573,11 @@ for company in greenhouse_companies:
 
                 "Freshness": "Fresh",
 
-                "Days Old": 2,
+                "Days Old": 1,
 
                 "Skills": ", ".join(skills),
+
+                "Description": description,
 
                 "URL": job.get("absolute_url")
             })
@@ -568,70 +585,81 @@ for company in greenhouse_companies:
     except:
         pass
 
-# =====================================================
+# =========================================================
 # DATAFRAME
-# =====================================================
+# =========================================================
 
 df = pd.DataFrame(jobs)
 
-# =====================================================
-# DUPLICATE DETECTION
-# =====================================================
+if df.empty:
+
+    st.warning("No matching jobs found.")
+
+    st.stop()
+
+# =========================================================
+# FILTERS
+# =========================================================
+
+df = df[
+    df["Work Mode"].isin(
+        workmode_filter
+    )
+]
+
+df = df[
+    df["Platform"].isin(
+        platform_filter
+    )
+]
+
+df = df[
+    df["Freshness"].isin(
+        freshness_filter
+    )
+]
+
+# =========================================================
+# DUPLICATES
+# =========================================================
 
 df["Duplicate"] = df.duplicated(
+
     subset=["Title", "Company"],
+
     keep=False
 )
 
-# =====================================================
+# =========================================================
 # HIRING SCORE
-# =====================================================
+# =========================================================
 
-def calculate_score(row):
+def score(row):
 
-    score = 50
+    value = 50
 
     if row["Work Mode"] == "Remote":
-        score += 10
+        value += 10
 
     if row["Freshness"] == "Fresh":
-        score += 15
-
-    if row["Platform"] == "Greenhouse":
-        score += 10
+        value += 15
 
     if row["Duplicate"]:
-        score += 5
+        value += 5
 
     if len(str(row["Skills"])) > 10:
-        score += 10
+        value += 10
 
-    return min(score, 100)
+    return min(value, 100)
 
 df["Hiring Score"] = df.apply(
-    calculate_score,
+    score,
     axis=1
 )
 
-# =====================================================
-# FILTERS
-# =====================================================
-
-df = df[
-    df["Platform"].isin(platform_filter)
-]
-
-df = df[
-    df["Work Mode"].isin(workmode_filter)
-]
-
-df = df[
-    df["Freshness"].isin(freshness_filter)
-]
-
-# =====================================================
+# =========================================================
 # RESUME ANALYSIS
-# =====================================================
+# =========================================================
 
 resume_score = None
 
@@ -649,15 +677,17 @@ if uploaded_resume:
         resume_text
     )
 
-    top_market_skills = [
+    market_skills = [
 
         skill
         for skill, count
         in Counter(all_skills).most_common(10)
     ]
 
-    matched = set(resume_skills).intersection(
-        set(top_market_skills)
+    matched = set(
+        resume_skills
+    ).intersection(
+        set(market_skills)
     )
 
     resume_score = round(
@@ -665,7 +695,7 @@ if uploaded_resume:
         (
             len(matched)
             /
-            max(len(top_market_skills), 1)
+            max(len(market_skills), 1)
         ) * 100,
 
         1
@@ -673,35 +703,35 @@ if uploaded_resume:
 
     missing_skills = list(
 
-        set(top_market_skills)
+        set(market_skills)
         -
         set(resume_skills)
     )
 
-# =====================================================
-# HERO METRICS
-# =====================================================
+# =========================================================
+# METRICS
+# =========================================================
 
 st.markdown("## Market Snapshot")
 
-c1, c2, c3, c4, c5 = st.columns(5)
+m1, m2, m3, m4, m5 = st.columns(5)
 
-c1.metric(
+m1.metric(
     "Listings",
     len(df)
 )
 
-c2.metric(
+m2.metric(
     "Companies",
     df["Company"].nunique()
 )
 
-c3.metric(
+m3.metric(
     "Platforms",
     df["Platform"].nunique()
 )
 
-c4.metric(
+m4.metric(
     "Remote Roles",
     len(
         df[
@@ -712,39 +742,89 @@ c4.metric(
     )
 )
 
-c5.metric(
-    "Duplicates",
+m5.metric(
+    "Duplicate Listings",
     int(df["Duplicate"].sum())
 )
 
-# =====================================================
+# =========================================================
+# AI INSIGHTS
+# =========================================================
+
+top_skill = Counter(all_skills).most_common(1)
+
+top_company = (
+
+    df["Company"]
+    .value_counts()
+    .idxmax()
+)
+
+st.info(
+
+    f"""
+    AI Hiring Insights
+
+    • Most demanded skill: {top_skill[0][0] if top_skill else 'N/A'}
+
+    • Most active recruiter: {top_company}
+
+    • Remote hiring trend remains dominant.
+
+    • Greenhouse startup hiring is increasing.
+    """
+)
+
+# =========================================================
 # RESUME SECTION
-# =====================================================
+# =========================================================
 
 if uploaded_resume:
 
-    st.divider()
-
     st.markdown("## Resume Match Intelligence")
 
-    r1, r2 = st.columns(2)
+    c1, c2 = st.columns(2)
 
-    with r1:
+    with c1:
 
         st.metric(
             "Resume Match Score",
             f"{resume_score}%"
         )
 
-        st.write(
-            "### Detected Skills"
+        skill_match = pd.DataFrame({
+
+            "Skill": resume_skills,
+
+            "Match": [1]*len(resume_skills)
+        })
+
+        fig = px.bar(
+
+            skill_match,
+
+            x="Skill",
+
+            y="Match",
+
+            color="Skill"
         )
 
-        st.write(
-            ", ".join(resume_skills)
+        fig.update_layout(
+
+            paper_bgcolor='rgba(0,0,0,0)',
+
+            plot_bgcolor='rgba(0,0,0,0)',
+
+            font_color='white'
         )
 
-    with r2:
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    with c2:
 
         st.write(
             "### Missing Market Skills"
@@ -754,20 +834,20 @@ if uploaded_resume:
 
             st.write(f"• {skill}")
 
-# =====================================================
+# =========================================================
 # TABS
-# =====================================================
+# =========================================================
 
 overview_tab, trends_tab, jobs_tab = st.tabs([
 
     "Overview",
     "Hiring Trends",
-    "Job Listings"
+    "Job Explorer"
 ])
 
-# =====================================================
+# =========================================================
 # OVERVIEW
-# =====================================================
+# =========================================================
 
 with overview_tab:
 
@@ -775,20 +855,24 @@ with overview_tab:
 
     with left:
 
-        st.subheader(
-            "Hiring Source Distribution"
+        platform_df = (
+
+            df["Platform"]
+            .value_counts()
+            .reset_index()
         )
 
         fig1 = px.pie(
 
-            df,
+            platform_df,
 
             names="Platform",
+
+            values="count",
 
             hole=0.6,
 
             color_discrete_sequence=[
-
                 "#3b82f6",
                 "#8b5cf6",
                 "#06b6d4"
@@ -796,8 +880,9 @@ with overview_tab:
         )
 
         fig1.update_layout(
+
             paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
+
             font_color='white'
         )
 
@@ -808,11 +893,7 @@ with overview_tab:
 
     with right:
 
-        st.subheader(
-            "Work Mode Distribution"
-        )
-
-        mode_df = (
+        work_df = (
 
             df["Work Mode"]
             .value_counts()
@@ -821,13 +902,11 @@ with overview_tab:
 
         fig2 = px.bar(
 
-            mode_df,
+            work_df,
 
-            x="count",
+            x="Work Mode",
 
-            y="Work Mode",
-
-            orientation="h",
+            y="count",
 
             color="count",
 
@@ -835,8 +914,11 @@ with overview_tab:
         )
 
         fig2.update_layout(
+
             paper_bgcolor='rgba(0,0,0,0)',
+
             plot_bgcolor='rgba(0,0,0,0)',
+
             font_color='white'
         )
 
@@ -845,9 +927,9 @@ with overview_tab:
             use_container_width=True
         )
 
-# =====================================================
-# HIRING TRENDS
-# =====================================================
+# =========================================================
+# TRENDS
+# =========================================================
 
 with trends_tab:
 
@@ -855,11 +937,7 @@ with trends_tab:
 
     with left:
 
-        st.subheader(
-            "Top Hiring Companies"
-        )
-
-        top_companies = (
+        company_df = (
 
             df["Company"]
             .value_counts()
@@ -867,30 +945,27 @@ with trends_tab:
             .reset_index()
         )
 
-        top_companies.columns = [
-
-            "Company",
-            "Listings"
-        ]
-
         fig3 = px.bar(
 
-            top_companies,
+            company_df,
 
-            x="Listings",
+            x="count",
 
             y="Company",
 
             orientation="h",
 
-            color="Listings",
+            color="count",
 
             color_continuous_scale="Viridis"
         )
 
         fig3.update_layout(
+
             paper_bgcolor='rgba(0,0,0,0)',
+
             plot_bgcolor='rgba(0,0,0,0)',
+
             font_color='white'
         )
 
@@ -901,22 +976,13 @@ with trends_tab:
 
     with right:
 
-        st.subheader(
-            "Most In-Demand Skills"
-        )
-
-        skill_counts = Counter(
-            all_skills
-        )
+        skill_counter = Counter(all_skills)
 
         skill_df = pd.DataFrame(
 
-            skill_counts.items(),
+            skill_counter.items(),
 
-            columns=[
-                "Skill",
-                "Count"
-            ]
+            columns=["Skill", "Count"]
 
         ).sort_values(
 
@@ -940,7 +1006,9 @@ with trends_tab:
         )
 
         fig4.update_layout(
+
             paper_bgcolor='rgba(0,0,0,0)',
+
             font_color='white'
         )
 
@@ -949,58 +1017,91 @@ with trends_tab:
             use_container_width=True
         )
 
-# =====================================================
-# JOB LISTINGS
-# =====================================================
+# =========================================================
+# JOB EXPLORER
+# =========================================================
 
 with jobs_tab:
 
-    st.subheader(
-        "Top Opportunities"
+    st.markdown("## Top Opportunities")
+
+    df = df.sort_values(
+        by="Hiring Score",
+        ascending=False
     )
 
-    display_df = (
+    for index, row in df.iterrows():
 
-        df.sort_values(
+        logo = f"https://logo.clearbit.com/{row['Company'].replace(' ','').lower()}.com"
 
-            by="Hiring Score",
+        with st.expander(
 
-            ascending=False
-        )
+            f"{row['Title']} • {row['Company']} • {row['Hiring Score']} Score"
+        ):
 
-        .reset_index(drop=True)
-    )
+            c1, c2 = st.columns([1,4])
 
-    st.dataframe(
+            with c1:
 
-        display_df[
+                st.image(
+                    logo,
+                    width=70
+                )
 
-            [
-                "Title",
-                "Company",
-                "Platform",
-                "Location",
-                "Work Mode",
-                "Experience",
-                "Freshness",
-                "Hiring Score",
-                "Duplicate",
-                "URL"
-            ]
-        ],
+            with c2:
 
-        use_container_width=True,
+                st.markdown(
+                    f"### {row['Title']}"
+                )
 
-        hide_index=True
-    )
+                st.write(
+                    f"**Company:** {row['Company']}"
+                )
 
-# =====================================================
+                st.write(
+                    f"**Platform:** {row['Platform']}"
+                )
+
+                st.write(
+                    f"**Location:** {row['Location']}"
+                )
+
+                st.write(
+                    f"**Work Mode:** {row['Work Mode']}"
+                )
+
+                st.write(
+                    f"**Experience:** {row['Experience']}"
+                )
+
+                st.write(
+                    f"**Freshness:** {row['Freshness']}"
+                )
+
+                st.write(
+                    f"**Skills:** {row['Skills']}"
+                )
+
+                st.write(
+                    f"**Duplicate Listing:** {row['Duplicate']}"
+                )
+
+                st.markdown(
+                    f"[Apply Here]({row['URL']})"
+                )
+
+# =========================================================
 # FOOTER
-# =====================================================
+# =========================================================
 
 st.divider()
 
 st.caption(
 
-    "RolePulse aggregates live hiring intelligence from Adzuna, RemoteOK, and Greenhouse APIs to analyze market demand, hiring trends, recruiter activity, resume alignment, and opportunity quality."
+    """
+    RolePulse aggregates live hiring intelligence from Adzuna,
+    RemoteOK, and Greenhouse APIs to analyze recruiter intent,
+    remote hiring demand, startup hiring activity, skill trends,
+    resume alignment, and market opportunity quality.
+    """
 )
