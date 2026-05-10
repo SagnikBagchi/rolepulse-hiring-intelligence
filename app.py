@@ -2,27 +2,67 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timezone
+
+# ---------------------------------------------------
+# PAGE CONFIG
+# ---------------------------------------------------
 
 st.set_page_config(
     page_title="RolePulse",
     layout="wide"
 )
 
-st.title("RolePulse")
-st.subheader("Hiring Intent & Job Intelligence Platform")
+# ---------------------------------------------------
+# CUSTOM STYLING
+# ---------------------------------------------------
 
-# -----------------------------
-# API Credentials
-# -----------------------------
+st.markdown("""
+<style>
+
+.main {
+    padding-top: 1rem;
+}
+
+.block-container {
+    padding-top: 2rem;
+}
+
+h1, h2, h3 {
+    font-weight: 700;
+}
+
+.metric-card {
+    background-color: #111827;
+    padding: 1rem;
+    border-radius: 12px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------
+# HEADER
+# ---------------------------------------------------
+
+st.title("RolePulse")
+st.caption("Hiring Intent & Job Intelligence Platform")
+
+st.divider()
+
+# ---------------------------------------------------
+# API CREDENTIALS
+# ---------------------------------------------------
 
 APP_ID = st.secrets["ADZUNA_APP_ID"]
 APP_KEY = st.secrets["ADZUNA_APP_KEY"]
 
-# -----------------------------
-# Sidebar
-# -----------------------------
+# ---------------------------------------------------
+# SIDEBAR
+# ---------------------------------------------------
 
-st.sidebar.header("Job Search")
+st.sidebar.header("Search Parameters")
 
 keyword = st.sidebar.text_input(
     "Job Role",
@@ -35,15 +75,23 @@ location = st.sidebar.text_input(
 )
 
 results_count = st.sidebar.slider(
-    "Number of Jobs",
+    "Number of Listings",
     10,
     50,
-    20
+    25
 )
 
-# -----------------------------
-# API Call
-# -----------------------------
+salary_filter = st.sidebar.slider(
+    "Minimum Salary",
+    0,
+    5000000,
+    0,
+    step=50000
+)
+
+# ---------------------------------------------------
+# API REQUEST
+# ---------------------------------------------------
 
 url = "https://api.adzuna.com/v1/api/jobs/in/search/1"
 
@@ -57,12 +105,11 @@ params = {
 }
 
 response = requests.get(url, params=params)
-
 data = response.json()
 
-# -----------------------------
-# Process Data
-# -----------------------------
+# ---------------------------------------------------
+# DATA PROCESSING
+# ---------------------------------------------------
 
 jobs = []
 
@@ -101,22 +148,72 @@ for job in data.get("results", []):
         0
     )
 
+    created = job.get("created", "")
+
     redirect_url = job.get(
         "redirect_url",
         ""
     )
 
-    # -----------------------------
-    # Hiring Intent Score
-    # -----------------------------
+    # ---------------------------------------------------
+    # FRESHNESS LOGIC
+    # ---------------------------------------------------
+
+    freshness = "Unknown"
+    freshness_score = 50
+
+    try:
+        created_date = datetime.strptime(
+            created,
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+
+        days_old = (
+            datetime.now(timezone.utc) -
+            created_date.replace(tzinfo=timezone.utc)
+        ).days
+
+        if days_old <= 7:
+            freshness = "Fresh"
+            freshness_score = 100
+
+        elif days_old <= 30:
+            freshness = "Moderate"
+            freshness_score = 70
+
+        else:
+            freshness = "Possibly Stale"
+            freshness_score = 40
+
+    except:
+        days_old = None
+
+    # ---------------------------------------------------
+    # COMPETITION LOGIC
+    # ---------------------------------------------------
+
+    competition = "Medium"
+
+    if "manager" in title.lower():
+        competition = "High"
+
+    if "director" in title.lower():
+        competition = "Low"
+
+    # ---------------------------------------------------
+    # HIRING INTENT SCORE
+    # ---------------------------------------------------
 
     score = 50
 
     if salary_min > 0:
         score += 15
 
-    if len(description) > 500:
+    if len(description) > 800:
         score += 10
+
+    if freshness == "Fresh":
+        score += 15
 
     if "senior" in title.lower():
         score += 5
@@ -126,15 +223,18 @@ for job in data.get("results", []):
 
     score = min(score, 100)
 
-    # -----------------------------
-    # Recommendation
-    # -----------------------------
+    # ---------------------------------------------------
+    # APPLICATION RECOMMENDATION
+    # ---------------------------------------------------
 
-    if score >= 80:
-        recommendation = "High Priority Apply"
+    if score >= 85:
+        recommendation = "Apply Immediately"
 
-    elif score >= 65:
-        recommendation = "Good Opportunity"
+    elif score >= 70:
+        recommendation = "Strong Opportunity"
+
+    elif score >= 55:
+        recommendation = "Moderate Priority"
 
     else:
         recommendation = "Low Confidence"
@@ -146,17 +246,53 @@ for job in data.get("results", []):
         "Salary Min": salary_min,
         "Salary Max": salary_max,
         "Hiring Intent Score": score,
+        "Freshness": freshness,
+        "Competition": competition,
         "Recommendation": recommendation,
+        "Days Old": days_old,
         "Job Link": redirect_url
     })
 
 df = pd.DataFrame(jobs)
 
-# -----------------------------
-# KPI Metrics
-# -----------------------------
+# ---------------------------------------------------
+# FILTERS
+# ---------------------------------------------------
 
-col1, col2, col3 = st.columns(3)
+if salary_filter > 0:
+    df = df[df["Salary Max"] >= salary_filter]
+
+# ---------------------------------------------------
+# EXECUTIVE INSIGHTS
+# ---------------------------------------------------
+
+st.subheader("Executive Market Insights")
+
+avg_score = round(df["Hiring Intent Score"].mean(), 1)
+
+top_company = (
+    df["Company"]
+    .value_counts()
+    .idxmax()
+)
+
+fresh_jobs = len(
+    df[df["Freshness"] == "Fresh"]
+)
+
+st.info(
+    f"""
+    Current market analysis indicates an average hiring intent score of {avg_score}.
+    {top_company} appears among the most active recruiters in the selected search.
+    {fresh_jobs} recently posted opportunities were identified with strong freshness signals.
+    """
+)
+
+# ---------------------------------------------------
+# KPI SECTION
+# ---------------------------------------------------
+
+col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
     "Jobs Retrieved",
@@ -165,86 +301,194 @@ col1.metric(
 
 col2.metric(
     "Average Hiring Score",
-    round(df["Hiring Intent Score"].mean(), 1)
+    avg_score
 )
 
 col3.metric(
+    "Fresh Listings",
+    fresh_jobs
+)
+
+col4.metric(
     "Companies Hiring",
     df["Company"].nunique()
 )
 
 st.divider()
 
-# -----------------------------
-# Charts
-# -----------------------------
+# ---------------------------------------------------
+# TABS
+# ---------------------------------------------------
 
-st.subheader("Hiring Intent Distribution")
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Overview",
+    "Market Intelligence",
+    "Application Insights",
+    "Job Listings"
+])
 
-fig1 = px.histogram(
-    df,
-    x="Hiring Intent Score",
-    nbins=10
-)
+# ---------------------------------------------------
+# TAB 1
+# ---------------------------------------------------
 
-st.plotly_chart(
-    fig1,
-    use_container_width=True
-)
+with tab1:
 
-# -----------------------------
+    st.subheader("Hiring Intent Distribution")
 
-st.subheader("Top Hiring Companies")
+    fig1 = px.histogram(
+        df,
+        x="Hiring Intent Score",
+        nbins=10
+    )
 
-top_companies = (
-    df["Company"]
-    .value_counts()
-    .head(10)
-    .reset_index()
-)
+    st.plotly_chart(
+        fig1,
+        use_container_width=True
+    )
 
-top_companies.columns = [
-    "Company",
-    "Jobs"
-]
+    st.subheader("Freshness Distribution")
 
-fig2 = px.bar(
-    top_companies,
-    x="Company",
-    y="Jobs"
-)
+    fig2 = px.pie(
+        df,
+        names="Freshness"
+    )
 
-st.plotly_chart(
-    fig2,
-    use_container_width=True
-)
+    st.plotly_chart(
+        fig2,
+        use_container_width=True
+    )
 
-# -----------------------------
+# ---------------------------------------------------
+# TAB 2
+# ---------------------------------------------------
 
-st.subheader("Job Listings")
+with tab2:
 
-st.dataframe(df)
+    st.subheader("Top Hiring Companies")
 
-# -----------------------------
+    top_companies = (
+        df["Company"]
+        .value_counts()
+        .head(10)
+        .reset_index()
+    )
 
-st.subheader("Key Insights")
+    top_companies.columns = [
+        "Company",
+        "Jobs"
+    ]
+
+    fig3 = px.bar(
+        top_companies,
+        x="Company",
+        y="Jobs"
+    )
+
+    st.plotly_chart(
+        fig3,
+        use_container_width=True
+    )
+
+    st.subheader("Location Hiring Heatmap")
+
+    top_locations = (
+        df["Location"]
+        .value_counts()
+        .head(10)
+        .reset_index()
+    )
+
+    top_locations.columns = [
+        "Location",
+        "Jobs"
+    ]
+
+    fig4 = px.treemap(
+        top_locations,
+        path=["Location"],
+        values="Jobs"
+    )
+
+    st.plotly_chart(
+        fig4,
+        use_container_width=True
+    )
+
+# ---------------------------------------------------
+# TAB 3
+# ---------------------------------------------------
+
+with tab3:
+
+    st.subheader("Top Recommended Opportunities")
+
+    recommended_df = df.sort_values(
+        by="Hiring Intent Score",
+        ascending=False
+    ).head(10)
+
+    st.dataframe(
+        recommended_df[
+            [
+                "Title",
+                "Company",
+                "Location",
+                "Hiring Intent Score",
+                "Freshness",
+                "Competition",
+                "Recommendation"
+            ]
+        ]
+    )
+
+    st.subheader("Competition Analysis")
+
+    fig5 = px.scatter(
+        df,
+        x="Hiring Intent Score",
+        y="Salary Max",
+        color="Competition",
+        hover_data=["Company", "Title"]
+    )
+
+    st.plotly_chart(
+        fig5,
+        use_container_width=True
+    )
+
+# ---------------------------------------------------
+# TAB 4
+# ---------------------------------------------------
+
+with tab4:
+
+    st.subheader("Complete Job Listings")
+
+    st.dataframe(df)
+
+# ---------------------------------------------------
+# FOOTER INSIGHTS
+# ---------------------------------------------------
+
+st.divider()
+
+st.subheader("Platform Recommendations")
 
 high_priority = len(
     df[
-        df["Recommendation"]
-        ==
-        "High Priority Apply"
+        df["Recommendation"] ==
+        "Apply Immediately"
     ]
 )
 
-st.write(
-    f"{high_priority} jobs show strong hiring signals."
+st.success(
+    f"{high_priority} opportunities currently show strong hiring and freshness signals."
 )
 
 st.write(
-    "Roles with salary transparency tend to score higher."
+    "Listings with salary transparency and detailed descriptions tend to correlate with stronger hiring intent indicators."
 )
 
 st.write(
-    "Detailed job descriptions correlate with stronger hiring confidence."
+    "Freshly posted roles generally demonstrate higher recruiter engagement probability."
 )
