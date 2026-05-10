@@ -78,16 +78,14 @@ results_count = st.sidebar.slider(
     25
 )
 
-salary_filter = st.sidebar.slider(
-    "Minimum Salary",
-    0,
-    5000000,
-    0,
-    step=50000
-)
-
-show_salary_only = st.sidebar.checkbox(
-    "Show only jobs with salary disclosed"
+freshness_filter = st.sidebar.selectbox(
+    "Job Freshness",
+    [
+        "All",
+        "Fresh",
+        "Moderate",
+        "Possibly Stale"
+    ]
 )
 
 # ---------------------------------------------------
@@ -117,7 +115,10 @@ jobs = []
 
 for job in data.get("results", []):
 
-    title = job.get("title", "N/A")
+    title = job.get(
+        "title",
+        "N/A"
+    )
 
     company = job.get(
         "company",
@@ -140,16 +141,6 @@ for job in data.get("results", []):
         ""
     )
 
-    salary_min = job.get(
-        "salary_min",
-        0
-    )
-
-    salary_max = job.get(
-        "salary_max",
-        0
-    )
-
     created = job.get(
         "created",
         ""
@@ -158,15 +149,6 @@ for job in data.get("results", []):
     redirect_url = job.get(
         "redirect_url",
         ""
-    )
-
-    # ---------------------------------------------------
-    # SALARY TRANSPARENCY
-    # ---------------------------------------------------
-
-    salary_disclosed = (
-        salary_min > 0
-        or salary_max > 0
     )
 
     # ---------------------------------------------------
@@ -216,18 +198,27 @@ for job in data.get("results", []):
         competition = "Low"
 
     # ---------------------------------------------------
+    # DESCRIPTION QUALITY
+    # ---------------------------------------------------
+
+    description_quality = "Low"
+
+    if len(description) > 400:
+        description_quality = "Moderate"
+
+    if len(description) > 800:
+        description_quality = "High"
+
+    # ---------------------------------------------------
     # HIRING INTENT SCORE
     # ---------------------------------------------------
 
     score = 50
 
-    if salary_disclosed:
-        score += 15
-
-    if len(description) > 800:
-        score += 10
-
     if freshness == "Fresh":
+        score += 20
+
+    if description_quality == "High":
         score += 15
 
     if "senior" in title.lower():
@@ -235,6 +226,9 @@ for job in data.get("results", []):
 
     if "urgent" in description.lower():
         score += 10
+
+    if "remote" in description.lower():
+        score += 5
 
     score = min(score, 100)
 
@@ -259,12 +253,10 @@ for job in data.get("results", []):
         "Title": title,
         "Company": company,
         "Location": location_name,
-        "Salary Min": salary_min,
-        "Salary Max": salary_max,
-        "Salary Disclosed": salary_disclosed,
         "Hiring Intent Score": score,
         "Freshness": freshness,
         "Competition": competition,
+        "Description Quality": description_quality,
         "Recommendation": recommendation,
         "Days Old": days_old,
         "Job Link": redirect_url
@@ -279,12 +271,10 @@ expected_columns = [
     "Title",
     "Company",
     "Location",
-    "Salary Min",
-    "Salary Max",
-    "Salary Disclosed",
     "Hiring Intent Score",
     "Freshness",
     "Competition",
+    "Description Quality",
     "Recommendation",
     "Days Old",
     "Job Link"
@@ -301,17 +291,12 @@ df = pd.DataFrame(
 
 if not df.empty:
 
-    if salary_filter > 0:
+    if freshness_filter != "All":
 
         df = df[
-            df["Salary Max"].fillna(0)
-            >= salary_filter
-        ]
-
-    if show_salary_only:
-
-        df = df[
-            df["Salary Disclosed"] == True
+            df["Freshness"]
+            ==
+            freshness_filter
         ]
 
 # ---------------------------------------------------
@@ -321,7 +306,7 @@ if not df.empty:
 if df.empty:
 
     st.warning(
-        "No job listings matched the selected filters. Try adjusting your filters or search query."
+        "No job listings matched the selected filters. Try adjusting your search."
     )
 
     st.stop()
@@ -342,14 +327,19 @@ top_company = (
 )
 
 fresh_jobs = len(
-    df[df["Freshness"] == "Fresh"]
+    df[
+        df["Freshness"]
+        ==
+        "Fresh"
+    ]
 )
 
-salary_transparency_rate = round(
-    (
-        df["Salary Disclosed"].mean()
-    ) * 100,
-    1
+high_quality_descriptions = len(
+    df[
+        df["Description Quality"]
+        ==
+        "High"
+    ]
 )
 
 st.subheader("Executive Market Insights")
@@ -362,7 +352,7 @@ st.info(
     
     {fresh_jobs} recently posted opportunities demonstrate strong freshness signals.
     
-    Salary transparency across analyzed listings currently stands at {salary_transparency_rate}%.
+    {high_quality_descriptions} listings contain high-detail descriptions indicating stronger recruiter intent.
     """
 )
 
@@ -388,8 +378,8 @@ col3.metric(
 )
 
 col4.metric(
-    "Salary Transparency",
-    f"{salary_transparency_rate}%"
+    "Companies Hiring",
+    df["Company"].nunique()
 )
 
 st.divider()
@@ -514,18 +504,19 @@ with tab3:
                 "Hiring Intent Score",
                 "Freshness",
                 "Competition",
+                "Description Quality",
                 "Recommendation"
             ]
         ],
         use_container_width=True
     )
 
-    st.subheader("Competition vs Salary Analysis")
+    st.subheader("Competition Analysis")
 
     fig5 = px.scatter(
         df,
         x="Hiring Intent Score",
-        y="Salary Max",
+        y="Days Old",
         color="Competition",
         hover_data=[
             "Company",
@@ -572,9 +563,9 @@ st.success(
 )
 
 st.write(
-    "Listings with salary transparency and detailed descriptions generally correlate with stronger hiring confidence."
+    "Recently posted roles with high-detail descriptions tend to indicate stronger recruiter engagement probability."
 )
 
 st.write(
-    "Recently posted roles tend to indicate higher recruiter engagement probability."
+    "Job freshness and description depth appear to correlate strongly with hiring confidence signals."
 )
