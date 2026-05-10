@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timezone
 
 # ---------------------------------------------------
@@ -15,27 +14,25 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# CUSTOM STYLING
+# CUSTOM CSS
 # ---------------------------------------------------
 
 st.markdown("""
 <style>
 
-.main {
-    padding-top: 1rem;
-}
-
 .block-container {
     padding-top: 2rem;
+    padding-bottom: 2rem;
 }
 
 h1, h2, h3 {
     font-weight: 700;
 }
 
-.metric-card {
+[data-testid="metric-container"] {
     background-color: #111827;
-    padding: 1rem;
+    border: 1px solid #1f2937;
+    padding: 15px;
     border-radius: 12px;
 }
 
@@ -62,7 +59,7 @@ APP_KEY = st.secrets["ADZUNA_APP_KEY"]
 # SIDEBAR
 # ---------------------------------------------------
 
-st.sidebar.header("Search Parameters")
+st.sidebar.header("Search Configuration")
 
 keyword = st.sidebar.text_input(
     "Job Role",
@@ -108,7 +105,7 @@ response = requests.get(url, params=params)
 data = response.json()
 
 # ---------------------------------------------------
-# DATA PROCESSING
+# PROCESS JOB DATA
 # ---------------------------------------------------
 
 jobs = []
@@ -148,7 +145,10 @@ for job in data.get("results", []):
         0
     )
 
-    created = job.get("created", "")
+    created = job.get(
+        "created",
+        ""
+    )
 
     redirect_url = job.get(
         "redirect_url",
@@ -156,21 +156,26 @@ for job in data.get("results", []):
     )
 
     # ---------------------------------------------------
-    # FRESHNESS LOGIC
+    # FRESHNESS DETECTION
     # ---------------------------------------------------
 
     freshness = "Unknown"
     freshness_score = 50
+    days_old = None
 
     try:
+
         created_date = datetime.strptime(
             created,
             "%Y-%m-%dT%H:%M:%SZ"
         )
 
         days_old = (
-            datetime.now(timezone.utc) -
-            created_date.replace(tzinfo=timezone.utc)
+            datetime.now(timezone.utc)
+            -
+            created_date.replace(
+                tzinfo=timezone.utc
+            )
         ).days
 
         if days_old <= 7:
@@ -186,7 +191,7 @@ for job in data.get("results", []):
             freshness_score = 40
 
     except:
-        days_old = None
+        pass
 
     # ---------------------------------------------------
     # COMPETITION LOGIC
@@ -240,6 +245,7 @@ for job in data.get("results", []):
         recommendation = "Low Confidence"
 
     jobs.append({
+
         "Title": title,
         "Company": company,
         "Location": location_name,
@@ -251,24 +257,45 @@ for job in data.get("results", []):
         "Recommendation": recommendation,
         "Days Old": days_old,
         "Job Link": redirect_url
+
     })
+
+# ---------------------------------------------------
+# DATAFRAME
+# ---------------------------------------------------
 
 df = pd.DataFrame(jobs)
 
 # ---------------------------------------------------
-# FILTERS
+# SALARY FILTER
 # ---------------------------------------------------
 
 if salary_filter > 0:
-    df = df[df["Salary Max"] >= salary_filter]
+
+    df = df[
+        df["Salary Max"] >= salary_filter
+    ]
+
+# ---------------------------------------------------
+# EMPTY DATAFRAME HANDLING
+# ---------------------------------------------------
+
+if df.empty:
+
+    st.warning(
+        "No job listings matched the selected filters. Try adjusting the minimum salary or changing the role/location."
+    )
+
+    st.stop()
 
 # ---------------------------------------------------
 # EXECUTIVE INSIGHTS
 # ---------------------------------------------------
 
-st.subheader("Executive Market Insights")
-
-avg_score = round(df["Hiring Intent Score"].mean(), 1)
+avg_score = round(
+    df["Hiring Intent Score"].mean(),
+    1
+)
 
 top_company = (
     df["Company"]
@@ -280,10 +307,14 @@ fresh_jobs = len(
     df[df["Freshness"] == "Fresh"]
 )
 
+st.subheader("Executive Market Insights")
+
 st.info(
     f"""
     Current market analysis indicates an average hiring intent score of {avg_score}.
-    {top_company} appears among the most active recruiters in the selected search.
+    
+    {top_company} appears among the most active recruiters in the selected market.
+    
     {fresh_jobs} recently posted opportunities were identified with strong freshness signals.
     """
 )
@@ -328,12 +359,12 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ---------------------------------------------------
-# TAB 1
+# OVERVIEW TAB
 # ---------------------------------------------------
 
 with tab1:
 
-    st.subheader("Hiring Intent Distribution")
+    st.subheader("Hiring Intent Score Distribution")
 
     fig1 = px.histogram(
         df,
@@ -346,7 +377,7 @@ with tab1:
         use_container_width=True
     )
 
-    st.subheader("Freshness Distribution")
+    st.subheader("Freshness Analysis")
 
     fig2 = px.pie(
         df,
@@ -359,7 +390,7 @@ with tab1:
     )
 
 # ---------------------------------------------------
-# TAB 2
+# MARKET INTELLIGENCE TAB
 # ---------------------------------------------------
 
 with tab2:
@@ -389,7 +420,7 @@ with tab2:
         use_container_width=True
     )
 
-    st.subheader("Location Hiring Heatmap")
+    st.subheader("Location Hiring Distribution")
 
     top_locations = (
         df["Location"]
@@ -415,7 +446,7 @@ with tab2:
     )
 
 # ---------------------------------------------------
-# TAB 3
+# APPLICATION INSIGHTS TAB
 # ---------------------------------------------------
 
 with tab3:
@@ -438,17 +469,21 @@ with tab3:
                 "Competition",
                 "Recommendation"
             ]
-        ]
+        ],
+        use_container_width=True
     )
 
-    st.subheader("Competition Analysis")
+    st.subheader("Competition vs Salary Analysis")
 
     fig5 = px.scatter(
         df,
         x="Hiring Intent Score",
         y="Salary Max",
         color="Competition",
-        hover_data=["Company", "Title"]
+        hover_data=[
+            "Company",
+            "Title"
+        ]
     )
 
     st.plotly_chart(
@@ -457,14 +492,17 @@ with tab3:
     )
 
 # ---------------------------------------------------
-# TAB 4
+# JOB LISTINGS TAB
 # ---------------------------------------------------
 
 with tab4:
 
     st.subheader("Complete Job Listings")
 
-    st.dataframe(df)
+    st.dataframe(
+        df,
+        use_container_width=True
+    )
 
 # ---------------------------------------------------
 # FOOTER INSIGHTS
@@ -476,19 +514,20 @@ st.subheader("Platform Recommendations")
 
 high_priority = len(
     df[
-        df["Recommendation"] ==
+        df["Recommendation"]
+        ==
         "Apply Immediately"
     ]
 )
 
 st.success(
-    f"{high_priority} opportunities currently show strong hiring and freshness signals."
+    f"{high_priority} opportunities currently show strong hiring intent and freshness indicators."
 )
 
 st.write(
-    "Listings with salary transparency and detailed descriptions tend to correlate with stronger hiring intent indicators."
+    "Roles with salary transparency and detailed descriptions generally correlate with stronger hiring signals."
 )
 
 st.write(
-    "Freshly posted roles generally demonstrate higher recruiter engagement probability."
+    "Recently posted opportunities tend to demonstrate higher recruiter engagement probability."
 )
